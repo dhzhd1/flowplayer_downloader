@@ -12,7 +12,7 @@ def parse_args():
     # eg. https://dq59ioeqhrg9x.cloudfront.net/bitmovin/600178_7c003dcc09cc2810e9ee4faf0662385d/video_0_2400000/dash/init.mp4
     # --segment-path = https://cdn-v2.tianmaying.com/272367/266942/720p/
     parser.add_argument('--segment-path', help='Video Segment URL Path', required=True, type=str)
-    parser.add_argument('--audio-segment-path', help='Audio Segment URL Path', required=True, type=str)
+    parser.add_argument('--audio-segment-path', help='Audio Segment URL Path', required=False, type=str)
     # --segment-name = 1164.ts  #.ts  -- I will replace '#' into an index
     parser.add_argument('--segment-name', help='Video Segment Name', required=True, type=str)
     # --target-dir
@@ -147,7 +147,10 @@ def main():
             print(audio_url_path)
             download(audio_url_path, os.path.join(args.target_dir, 'audio'))
         else:
-            url_path = os.path.join(args.segment_path, args.segment_name.replace('#', '{0:04d}'.format(i)))
+            padding_format = '{0:0' + str(args.segment_name.count('#')) + 'd}'
+            url_path = os.path.join(args.segment_path, args.segment_name.replace('#' * args.segment_name.count('#'),
+                                                                                 padding_format.format(i)))
+            # url_path = os.path.join(args.segment_path, args.segment_name.replace('#', '{0:04d}'.format(i)))
             print(url_path)
             download(url_path)
 
