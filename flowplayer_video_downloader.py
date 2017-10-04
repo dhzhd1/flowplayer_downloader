@@ -5,6 +5,8 @@ import os
 import glob
 import shutil
 import re
+import subprocess
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="BitTiger Archive Course Downloader")
@@ -23,6 +25,8 @@ def parse_args():
     parser.add_argument('--start-segment', help='Start Index of Segment', required=False, type=int)
     # --download-audio
     parser.add_argument('--download-audio', help='Some stream split the audio and video', required=False, type=bool)
+    # --output-filename
+    parser.add_argument('--output-filename', help='File name for output video', required=False, type=str)
     args = parser.parse_args()
     return args
 
@@ -61,8 +65,10 @@ def download_init():
 def atoi(text):
     return int(text) if text.isdigit() else text
 
+
 def natural_keys(text):
     return [ atoi(c) for c in re.split('(\d+)', text) ] 
+
 
 def concatenate_segments():
     if args.download_audio is True:
@@ -108,24 +114,33 @@ def concatenate_segments():
         print("All of video segments have been merged into {}".format(target_file_name))
         print("Now you can use below command to convert this merged file to one")
         print("    $ ffmpeg -i [input_file_name] -bsf:a aac_adtstoasc -vcodec copy [output_file_name]")
+        print("    $ ffmpeg -i all.ts -bsf:a aac_adtstoasc -vcodec copy output.mp4")
 
 
-def convert_to_mp4():
+def convert_to_mp4(output_filename):
     # ref : https://gist.github.com/maxwellito/90a0f1c94c3f6e63e52a
     # ffmpeg -i all.ts -bsf:a aac_adtstoasc -vcodec copy output.mp4
-    pass
+    print("Combining and converting to MP4 file...")
+    if args.download_audio is True:
+        subprocess.call(["ffmpeg", "-i", "video.m4s", "-i", "audio.m4s",
+                         "-acodec", "copy", "-vcodec", "copy", output_filename])
+    else:
+        subprocess.call(["ffmpeg", "-i", "all.ts", "-bsf:a", "aac_adtstoasc", "-vcodec", "copy", output_filename])
+    print("MP4 file converted as {}".format(output_filename))
 
 
 def main():
     # print("Arguments: {}".format(args.segment_name))
     max_index = 65535 if args.end_segment is None else args.end_segment + 1
     start_index = 0 if args.start_segment is None else args.start_segment
+    output_filename = "output.mp4" if args.output_filename is None else args.output_filename
     print("===================Parameters=========================")
     print("Segments URL: {}".format(args.segment_path))
     print("Audio Segments URL: {}".format(args.audio_segment_path))
     print("Segments Index: start with {}, end with {}".format(start_index, max_index))
     print("Segment file Name with Mask: {}".format(args.segment_name))
     print("Downloaded segments saved in {}".format(args.target_dir))
+    print("Output file name: {}".format(output_filename))
     print("=======================================================")
 
     if not os.path.exists(args.target_dir):
@@ -161,6 +176,8 @@ def main():
     print("Video Segments download finished!")
 
     concatenate_segments()
+
+    convert_to_mp4(output_filename)
 
 if __name__ == "__main__":
     import time
