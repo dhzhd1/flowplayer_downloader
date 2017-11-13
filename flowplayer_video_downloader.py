@@ -145,8 +145,11 @@ def main():
 
     if not os.path.exists(args.target_dir):
         os.mkdir(args.target_dir)
-        if args.download_audio is True:
+
+    if args.download_audio is True:
+        if not os.path.exists(os.path.join(args.target_dir, 'video')):
             os.mkdir(os.path.join(args.target_dir, 'video'))
+        if not os.path.exists(os.path.join(args.target_dir, 'audio')):
             os.mkdir(os.path.join(args.target_dir, 'audio'))
 
     if args.download_audio is True:
