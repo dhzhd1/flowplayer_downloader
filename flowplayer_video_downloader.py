@@ -6,6 +6,8 @@ import glob
 import shutil
 import re
 import subprocess
+import Queue
+from threading import Thread
 
 
 def parse_args():
@@ -27,6 +29,8 @@ def parse_args():
     parser.add_argument('--download-audio', help='Some stream split the audio and video', required=False, type=bool)
     # --output-filename
     parser.add_argument('--output-filename', help='File name for output video', required=False, type=str)
+    # --thread = 3
+    parser.add_argument('--thread', help='Specify the muliple threads numbers', required=False, type=int)
     args = parser.parse_args()
     return args
 
@@ -34,32 +38,52 @@ args = parse_args()
 stop_flag = False
 
 
-def download(url_path, dest_path=None):
-    if dest_path is None:
-        save_folder = args.target_dir
-    else:
-        save_folder = dest_path
-    try:
-        segment = urllib.URLopener()
-        segment.retrieve(url_path, os.path.join(save_folder, url_path.split('/')[-1]))
-        print("Segment: {}  has been downloaded!".format(url_path.split('/')[-1]))
-    except IOError as e:
-        if "Not Found" in e and 404 in e:
-            global stop_flag
-            stop_flag = True
+def download(url_queue, dest_path=None):
+    while not url_queue.empty():
+        url_path = url_queue.get()
+        if 'audio' in url_path.lower():
+            save_folder = os.path.join(args.target_dir, 'audio')
+        elif 'video' in url_path.lower():
+            save_folder = os.path.join(args.target_dir, 'video')
+        else:
+            save_folder = args.target_dir
+        try:
+            segment = urllib.URLopener()
+            segment.retrieve(url_path, os.path.join(save_folder, url_path.split('/')[-1]))
+        except IOError as e:
+            if "Not Found" in e and 404 in e:
+                global stop_flag
+                stop_flag = True
+                print("Segment: {} download failed for 404 error!".format(url_path.split('/')[-1]))
+
 
 def download_init():
     video_init_file = os.path.join(args.segment_path, 'init.mp4')
     audio_init_file = os.path.join(args.audio_segment_path, 'init.mp4')
     init_file = urllib.URLopener()
-    print(video_init_file)
     init_file.retrieve(video_init_file, os.path.join(args.target_dir, 'video', 'init.mp4'))
-    print("Segment: {}  has been downloaded!".format(video_init_file.split('/')[-1]))
-
+    print("Video Init Segment: {}  has been downloaded!".format(video_init_file.split('/')[-1]))
     init_file = urllib.URLopener()
-    print(audio_init_file)
     init_file.retrieve(audio_init_file, os.path.join(args.target_dir, 'audio', 'init.mp4'))
-    print("Segment: {}  has been downloaded!".format(audio_init_file.split('/')[-1]))
+    print("Audio Init Segment: {}  has been downloaded!".format(audio_init_file.split('/')[-1]))
+
+
+def build_download_queue(start_index, max_index):
+    queue = Queue.Queue()
+    for i in xrange(start_index, max_index):
+        if args.download_audio is True:
+            url_path = os.path.join(args.segment_path, args.segment_name.replace('#', str(i)))
+            audio_url_path = os.path.join(args.audio_segment_path, args.segment_name.replace('#', str(i)))
+            queue.put(url_path)
+            queue.put(audio_url_path)
+
+        else:
+            padding_format = '{0:0' + str(args.segment_name.count('#')) + 'd}'
+            url_path = os.path.join(args.segment_path, args.segment_name.replace('#' * args.segment_name.count('#'),
+                                                                                 padding_format.format(i)))
+            queue.put(url_path)
+
+    return queue
 
 
 def atoi(text):
@@ -84,7 +108,7 @@ def concatenate_segments():
         shutil.copyfileobj(open(os.path.join(args.target_dir, 'audio', 'init.mp4')), audio_f)
         print("All of audio segment will be merged into {}".format(audio_file_name))
         for file in audio_file_list:
-            print("Merging {} ...".format(file))
+            # print("Merging {} ...".format(file))
             shutil.copyfileobj(open(file, 'rb'), audio_f)
         audio_f.close()
         print("All of audio segments have been merged into {}".format(audio_file_name))
@@ -94,7 +118,7 @@ def concatenate_segments():
         shutil.copyfileobj(open(os.path.join(args.target_dir, 'video', 'init.mp4')), video_f)
         print("All of video segment will be merged into {}".format(video_file_name))
         for file in video_file_list:
-            print("Merging {} ...".format(file))
+            # print("Merging {} ...".format(file))
             shutil.copyfileobj(open(file, 'rb'), video_f)
         video_f.close()
         print("All of video segments have been merged into {}".format(video_file_name))
@@ -130,10 +154,10 @@ def convert_to_mp4(output_filename):
 
 
 def main():
-    # print("Arguments: {}".format(args.segment_name))
     max_index = 65535 if args.end_segment is None else args.end_segment + 1
     start_index = 0 if args.start_segment is None else args.start_segment
     output_filename = "output.mp4" if args.output_filename is None else args.output_filename
+    thread_num = 3 if args.thread is None else args.thread
     print("===================Parameters=========================")
     print("Segments URL: {}".format(args.segment_path))
     print("Audio Segments URL: {}".format(args.audio_segment_path))
@@ -155,31 +179,25 @@ def main():
     if args.download_audio is True:
         download_init()
 
-    for i in xrange(start_index, max_index):
+    print("Start downloading, please wait...")
+    download_queue = build_download_queue(start_index, max_index)
+    download_threads = []
 
-        if args.download_audio is True:
-            url_path = os.path.join(args.segment_path, args.segment_name.replace('#', str(i)))
-            audio_url_path = os.path.join(args.audio_segment_path, args.segment_name.replace('#', str(i)))
-            print(url_path)
-            download(url_path, os.path.join(args.target_dir, 'video'))
-            print(audio_url_path)
-            download(audio_url_path, os.path.join(args.target_dir, 'audio'))
-        else:
-            padding_format = '{0:0' + str(args.segment_name.count('#')) + 'd}'
-            url_path = os.path.join(args.segment_path, args.segment_name.replace('#' * args.segment_name.count('#'),
-                                                                                 padding_format.format(i)))
-            # url_path = os.path.join(args.segment_path, args.segment_name.replace('#', '{0:04d}'.format(i)))
-            print(url_path)
-            download(url_path)
+    for t in xrange(thread_num):
+        download_thread = Thread(target=download, args=(download_queue,))
+        download_threads.append(download_thread)
 
-        if stop_flag:
-            print("Downloading ending with index of {}".format(str(i)))
-            break
+    thread_id = 0
+    for t in download_threads:
+        t.start()
+        print("Downloading Threading #{} started.".format(str(thread_id)))
+        thread_id += 1
+
+    for t in download_threads:
+        t.join()
 
     print("Video Segments download finished!")
-
     concatenate_segments()
-
     convert_to_mp4(output_filename)
 
 if __name__ == "__main__":
