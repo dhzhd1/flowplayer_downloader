@@ -11,7 +11,7 @@ from threading import Thread
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="BitTiger Archive Course Downloader")
+    parser = argparse.ArgumentParser(description="Online Video Downloader")
     # eg. https://cdn-v2.tianmaying.com/272367/266942/720p/1163.ts
     # eg. https://dq59ioeqhrg9x.cloudfront.net/bitmovin/600178_7c003dcc09cc2810e9ee4faf0662385d/video_0_2400000/dash/init.mp4
     # --segment-path = https://cdn-v2.tianmaying.com/272367/266942/720p/
