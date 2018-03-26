@@ -31,6 +31,8 @@ def parse_args():
     parser.add_argument('--output-filename', help='File name for output video', required=False, type=str)
     # --thread = 3
     parser.add_argument('--thread', help='Specify the muliple threads numbers', required=False, type=int)
+    # --has-init-seg
+    parser.add_argument('--has-init', help='Specify if the vide has init.mp4, init segment', required=False, type=bool)
     args = parser.parse_args()
     return args
 
@@ -94,7 +96,7 @@ def natural_keys(text):
     return [ atoi(c) for c in re.split('(\d+)', text) ] 
 
 
-def concatenate_segments():
+def concatenate_segments(has_init_seg=True):
     if args.download_audio is True:
         video_file_list = glob.glob(os.path.join(args.target_dir, 'video', '*.' + args.segment_name.split('.')[-1]))
         audio_file_list = glob.glob(os.path.join(args.target_dir, 'audio', '*.' + args.segment_name.split('.')[-1]))
@@ -104,8 +106,9 @@ def concatenate_segments():
         video_file_name = os.path.join('./' , 'video.' + args.segment_name.split('.')[-1].strip())
 
         audio_f = open(audio_file_name, 'wb')
-        print("Merging audio init file {} ".format(os.path.join(args.target_dir, 'audio', 'init.mp4')))
-        shutil.copyfileobj(open(os.path.join(args.target_dir, 'audio', 'init.mp4')), audio_f)
+        if has_init_seg:
+            print("Merging audio init file {} ".format(os.path.join(args.target_dir, 'audio', 'init.mp4')))
+            shutil.copyfileobj(open(os.path.join(args.target_dir, 'audio', 'init.mp4')), audio_f)
         print("All of audio segment will be merged into {}".format(audio_file_name))
         for file in audio_file_list:
             # print("Merging {} ...".format(file))
@@ -114,8 +117,9 @@ def concatenate_segments():
         print("All of audio segments have been merged into {}".format(audio_file_name))
 
         video_f = open(video_file_name, 'wb')
-        print("Merging video init file {} ".format(os.path.join(args.target_dir, 'video', 'init.mp4')))
-        shutil.copyfileobj(open(os.path.join(args.target_dir, 'video', 'init.mp4')), video_f)
+        if has_init_seg:
+            print("Merging video init file {} ".format(os.path.join(args.target_dir, 'video', 'init.mp4')))
+            shutil.copyfileobj(open(os.path.join(args.target_dir, 'video', 'init.mp4')), video_f)
         print("All of video segment will be merged into {}".format(video_file_name))
         for file in video_file_list:
             # print("Merging {} ...".format(file))
@@ -146,10 +150,10 @@ def convert_to_mp4(output_filename):
     # ffmpeg -i all.ts -bsf:a aac_adtstoasc -vcodec copy output.mp4
     print("Combining and converting to MP4 file...")
     if args.download_audio is True:
-        subprocess.call(["ffmpeg", "-i", "video.m4s", "-i", "audio.m4s",
+        subprocess.call(["ffmpeg", "-i", "video." + args.segment_name.split('.')[-1].strip(), "-i", "audio." + args.segment_name.split('.')[-1].strip(),
                          "-acodec", "copy", "-vcodec", "copy", output_filename])
     else:
-        subprocess.call(["ffmpeg", "-i", "all.ts", "-bsf:a", "aac_adtstoasc", "-vcodec", "copy", output_filename])
+        subprocess.call(["ffmpeg", "-i", "all." + args.segment_name.split('.')[-1].strip(), "-bsf:a", "aac_adtstoasc", "-vcodec", "copy", output_filename])
     print("MP4 file converted as {}".format(output_filename))
 
 
@@ -158,6 +162,7 @@ def main():
     start_index = 0 if args.start_segment is None else args.start_segment
     output_filename = "output.mp4" if args.output_filename is None else args.output_filename
     thread_num = 3 if args.thread is None else args.thread
+    has_init_seg = False if args.has_init is None else args.has_init
     print("===================Parameters=========================")
     print("Segments URL: {}".format(args.segment_path))
     print("Audio Segments URL: {}".format(args.audio_segment_path))
@@ -165,6 +170,7 @@ def main():
     print("Segment file Name with Mask: {}".format(args.segment_name))
     print("Downloaded segments saved in {}".format(args.target_dir))
     print("Output file name: {}".format(output_filename))
+    print("Has Init Segmentation: {}".format(args.has_init))
     print("=======================================================")
 
     if not os.path.exists(args.target_dir):
@@ -176,7 +182,7 @@ def main():
         if not os.path.exists(os.path.join(args.target_dir, 'audio')):
             os.mkdir(os.path.join(args.target_dir, 'audio'))
 
-    if args.download_audio is True:
+    if args.download_audio is True and has_init_seg :
         download_init()
 
     print("Start downloading, please wait...")
@@ -197,7 +203,7 @@ def main():
         t.join()
 
     print("Video Segments download finished!")
-    concatenate_segments()
+    concatenate_segments(has_init_seg)
     convert_to_mp4(output_filename)
 
 if __name__ == "__main__":
